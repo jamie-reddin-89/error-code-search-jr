@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Home, Plus, Edit, Trash2, Users, BarChart3, Wrench, ScrollText, FilePlus2 } from "lucide-react";
-import TopRightControls from "@/components/TopRightControls";
+import { Home, Plus, Edit, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useUserRole } from "@/hooks/useUserRole";
 import { Button } from "@/components/ui/button";
@@ -23,7 +22,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { BrandSelect, ModelSelect, CategorySelect, TagInput } from "@/components/admin/Selectors";
 
 const systemNames = [
   "joule-victorum",
@@ -63,19 +61,18 @@ export default function Admin() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { toast } = useToast();
 
-  const [errorCodesTable, setErrorCodesTable] = useState<string | null>(null);
-
   useEffect(() => {
     if (isAdmin) {
-      resolveErrorCodesTable().then(loadErrorCodes);
+      loadErrorCodes();
     }
   }, [isAdmin]);
 
+  // Handle edit from URL parameters
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const editCode = params.get('edit');
     const systemName = params.get('system');
-
+    
     if (editCode && systemName && errorCodes.length > 0) {
       const codeToEdit = errorCodes.find(
         c => c.code === editCode && c.system_name === systemName
@@ -83,42 +80,15 @@ export default function Admin() {
       if (codeToEdit) {
         setEditingCode(codeToEdit);
         setIsDialogOpen(true);
+        // Clear URL parameters
         window.history.replaceState({}, '', '/admin');
       }
     }
   }, [errorCodes]);
 
-  async function resolveErrorCodesTable() {
-    if (errorCodesTable) return errorCodesTable;
-    try {
-      const { data, error } = await (supabase as any).from('error_codes_db' as any).select('id').limit(1);
-      if (!error) {
-        setErrorCodesTable('error_codes_db');
-        return 'error_codes_db';
-      }
-      // if error message suggests missing table, fallback
-      if (error && String(error.message || '').toLowerCase().includes('could not find')) {
-        const { data: d2, error: e2 } = await (supabase as any).from('error_codes' as any).select('id').limit(1);
-        if (!e2) {
-          setErrorCodesTable('error_codes');
-          toast({ title: 'Using fallback table', description: "Using 'error_codes' as 'error_codes_db' not found", variant: 'warning' });
-          return 'error_codes';
-        }
-      }
-      // default to error_codes_db even if error; let queries handle it
-      setErrorCodesTable('error_codes_db');
-      return 'error_codes_db';
-    } catch (err: any) {
-      setErrorCodesTable('error_codes');
-      toast({ title: 'Error detecting error codes table', description: String(err?.message || err), variant: 'destructive' });
-      return 'error_codes';
-    }
-  }
-
   async function loadErrorCodes() {
-    const table = (errorCodesTable) || 'error_codes_db';
     const { data, error } = await (supabase as any)
-      .from(table as any)
+      .from("error_codes_db" as any)
       .select("*")
       .order("system_name", { ascending: true })
       .order("code", { ascending: true });
@@ -126,7 +96,7 @@ export default function Admin() {
     if (error) {
       toast({
         title: "Error loading codes",
-        description: String(error.message || error),
+        description: error.message,
         variant: "destructive",
       });
     } else {
@@ -149,10 +119,9 @@ export default function Admin() {
         troubleshooting_steps: formData.troubleshooting_steps || null,
       };
 
-      const table = errorCodesTable || 'error_codes_db';
       if (editingCode?.id) {
         const { error } = await (supabase as any)
-          .from(table as any)
+          .from("error_codes_db" as any)
           .update(dataToSave)
           .eq("id", editingCode.id);
 
@@ -160,7 +129,7 @@ export default function Admin() {
         toast({ title: "Error code updated successfully" });
       } else {
         const { error } = await (supabase as any)
-          .from(table as any)
+          .from("error_codes_db" as any)
           .insert([dataToSave]);
 
         if (error) throw error;
@@ -182,9 +151,8 @@ export default function Admin() {
   async function handleDelete(id: string) {
     if (!confirm("Are you sure you want to delete this error code?")) return;
 
-    const table = errorCodesTable || 'error_codes_db';
     const { error } = await (supabase as any)
-      .from(table as any)
+      .from("error_codes_db" as any)
       .delete()
       .eq("id", id);
 
@@ -229,48 +197,19 @@ export default function Admin() {
 
   return (
     <div className="page-container">
-      <TopRightControls />
-      <header className="flex items-center justify-between mb-8 w-full max-w-xl">
+      <header className="flex items-center justify-between mb-8">
         <Link to="/">
-          <Button variant="ghost" size="icon" aria-label="Go home">
+          <Button variant="ghost" size="icon">
             <Home size={20} />
           </Button>
         </Link>
         <h1 className="text-2xl font-bold">Admin Dashboard</h1>
-        <div className="w-10" />
-      </header>
-
-      <div className="button-container">
-        <Link to="/admin/users" className="nav-button flex items-center justify-center gap-2">
-          <Users size={20} />
-          Users
-        </Link>
-        <Link to="/admin/analytics" className="nav-button flex items-center justify-center gap-2">
-          <BarChart3 size={20} />
-          Analytics
-        </Link>
-        <Link to="/admin/fix-steps" className="nav-button flex items-center justify-center gap-2">
-          <Wrench size={20} />
-          Fix Steps
-        </Link>
-        <Link to="/admin/app-logs" className="nav-button flex items-center justify-center gap-2">
-          <ScrollText size={20} />
-          App Logs
-        </Link>
-        <Link to="/admin/add-error-info" className="nav-button flex items-center justify-center gap-2">
-          <FilePlus2 size={20} />
-          Add Error Info
-        </Link>
-        <Link to="/admin/add-device" className="nav-button flex items-center justify-center gap-2">
-          <Plus size={20} />
-          Add Device
-        </Link>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <button className="nav-button flex items-center justify-center gap-2" onClick={() => setEditingCode(null)}>
-              <Plus size={20} />
+            <Button onClick={() => setEditingCode(null)}>
+              <Plus className="mr-2 h-4 w-4" />
               Add Error Code
-            </button>
+            </Button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
@@ -285,9 +224,9 @@ export default function Admin() {
             />
           </DialogContent>
         </Dialog>
-      </div>
+      </header>
 
-      <div className="w-full max-w-xl mt-8 grid gap-4">
+      <div className="grid gap-4">
         {errorCodes.map((code) => (
           <div
             key={code.id}
@@ -315,7 +254,6 @@ export default function Admin() {
                   setEditingCode(code);
                   setIsDialogOpen(true);
                 }}
-                aria-label="Edit error code"
               >
                 <Edit className="h-4 w-4" />
               </Button>
@@ -323,7 +261,6 @@ export default function Admin() {
                 variant="ghost"
                 size="icon"
                 onClick={() => handleDelete(code.id)}
-                aria-label="Delete error code"
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -355,10 +292,6 @@ function ErrorCodeForm({
       manual_url: "",
       video_url: "",
       related_codes: [],
-      brand: undefined,
-      model: undefined,
-      category: undefined,
-      tags: [],
     }
   );
 
@@ -399,28 +332,6 @@ function ErrorCodeForm({
           onChange={(e) => setFormData({ ...formData, code: e.target.value })}
           required
         />
-      </div>
-
-      <div className="grid grid-cols-1 gap-2">
-        <BrandSelect value={formData.brand_id || null} onChange={async (brandId) => {
-          if (!brandId) { setFormData({ ...formData, brand_id: undefined, brand: undefined, model_id: undefined, model: undefined }); return; }
-          const { data } = await supabase.from('brands').select('name').eq('id', brandId).maybeSingle();
-          setFormData({ ...formData, brand_id: brandId, brand: data?.name || undefined, model_id: undefined, model: undefined });
-        }} />
-
-        <ModelSelect value={formData.model_id || null} brandId={formData.brand_id||null} onChange={async (modelId) => {
-          if (!modelId) { setFormData({ ...formData, model_id: undefined, model: undefined }); return; }
-          const { data } = await supabase.from('models').select('name').eq('id', modelId).maybeSingle();
-          setFormData({ ...formData, model_id: modelId, model: data?.name || undefined });
-        }} />
-
-        <CategorySelect value={formData.category_id || null} onChange={async (catId) => {
-          if (!catId) { setFormData({ ...formData, category_id: undefined, category: undefined }); return; }
-          const { data } = await supabase.from('categories').select('name').eq('id', catId).maybeSingle();
-          setFormData({ ...formData, category_id: catId, category: data?.name || undefined });
-        }} />
-
-        <TagInput value={formData.tags || []} onChange={(tags)=>setFormData({ ...formData, tags })} />
       </div>
 
       <div>
